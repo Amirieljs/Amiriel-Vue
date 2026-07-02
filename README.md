@@ -1,6 +1,12 @@
-# Amiriel Vue
+<p align="center">
+  <img src="https://amiriel.com/logo/amiriel_256x256.webp" alt="Amiriel logo" width="96" height="96" />
+</p>
 
-Vue 3 components for Amiriel letter documents.
+<h1 align="center">Amiriel Vue</h1>
+
+<p align="center">
+  Vue 3 components for Amiriel letter documents.
+</p>
 
 `@amiriel/vue` provides a Vue implementation of the Amiriel document renderer
 and editor. It is built on `amiriel`, so the document model, themes, labels, and
@@ -28,19 +34,11 @@ delivery workflows. Host applications own those concerns.
 
 ## Install
 
-Pre-release builds are published under the `beta` dist-tag:
-
 ```bash
 npm install @amiriel/vue@beta vue
 pnpm add @amiriel/vue@beta vue
 yarn add @amiriel/vue@beta vue
 bun add @amiriel/vue@beta vue
-```
-
-After the first stable release, install without the tag:
-
-```bash
-npm install @amiriel/vue vue
 ```
 
 Import the stylesheet once:
@@ -164,26 +162,6 @@ const customThemes: AmirielThemeDefinition[] = [
 This repository is the Vue implementation. The shared framework-agnostic core
 lives in [`amiriel`](https://github.com/Amirieljs/Amiriel), and the React
 implementation lives in [`@amiriel/react`](https://github.com/Amirieljs/Amiriel-React).
-
-The Vue package keeps the public component and type surface aligned with
-earlier beta APIs where possible, while delegating shared types, labels, theme
-definitions, and utility functions to `amiriel`.
-
-## Migration From Earlier Betas
-
-Earlier beta releases published the Vue implementation as `amiriel`. Starting
-with this package split, `amiriel` is the framework-agnostic core and Vue users
-should install `@amiriel/vue`.
-
-```diff
-- npm install amiriel@beta
-+ npm install @amiriel/vue@beta vue
-
-- import { AmirielBodyEditor } from "amiriel";
-- import "amiriel/style.css";
-+ import { AmirielBodyEditor } from "@amiriel/vue";
-+ import "@amiriel/vue/style.css";
-```
 
 ## Release Sync
 
