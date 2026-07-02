@@ -1,20 +1,17 @@
-<p align="center">
-  <img src="https://amiriel.com/logo/amiriel_256x256.webp" alt="Amiriel logo" width="96" height="96" />
-</p>
+# Amiriel Vue
 
-<h1 align="center">Amiriel Vue</h1>
+Vue 3 components for Amiriel letter documents.
 
-<p align="center">
-  Portable Vue 3 body editor and renderer for Amiriel letter-style documents.
-</p>
+`@amiriel/vue` provides a Vue implementation of the Amiriel document renderer
+and editor. It is built on `amiriel`, so the document model, themes, labels, and
+normalization rules stay aligned with the React package.
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/amiriel"><img src="https://img.shields.io/npm/v/amiriel/beta?style=flat-square" alt="npm version (beta)" /></a>
-  <a href="https://www.npmjs.com/package/amiriel"><img src="https://img.shields.io/npm/dm/amiriel?style=flat-square" alt="npm downloads" /></a>
-  <a href="https://www.npmjs.com/package/amiriel"><img src="https://img.shields.io/npm/l/amiriel?style=flat-square" alt="license" /></a>
-  <img src="https://img.shields.io/badge/vue-3.5+-4FC08D?style=flat-square&logo=vue.js&logoColor=white" alt="Vue 3.5+" />
-  <img src="https://img.shields.io/badge/typescript-ready-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-</p>
+[![npm version (beta)](https://img.shields.io/npm/v/@amiriel/vue/beta?style=flat-square)](https://www.npmjs.com/package/@amiriel/vue)
+[![license](https://img.shields.io/npm/l/@amiriel/vue?style=flat-square)](https://www.npmjs.com/package/@amiriel/vue)
+[![Vue](https://img.shields.io/badge/vue-3.5+-4FC08D?style=flat-square&logo=vue.js&logoColor=white)](https://vuejs.org/)
+[![TypeScript](https://img.shields.io/badge/typescript-ready-3178C6?style=flat-square&logo=typescript&logoColor=white)]()
+
+The full hosted product lives at [amiriel.com](https://amiriel.com).
 
 ## Features
 
@@ -23,27 +20,39 @@
 - Matching read-only renderer for preview and delivery flows
 - Image/video lightbox and inline video helpers
 - Host-controlled media upload via `media-request` events
-- Shared model and document helpers from `@amiriel/core`
-- No storage, authentication, database, or hosted workflow bundled
+- Shared model and document helpers from `amiriel`
+- TypeScript declarations
 
-The full hosted product lives at [amiriel.com](https://amiriel.com).
+The package does not include storage, authentication, routing, database, or
+delivery workflows. Host applications own those concerns.
 
 ## Install
 
 Pre-release builds are published under the `beta` dist-tag:
 
 ```bash
-npm install amiriel@beta
-pnpm add amiriel@beta
-yarn add amiriel@beta
-bun add amiriel@beta
+npm install @amiriel/vue@beta vue
+pnpm add @amiriel/vue@beta vue
+yarn add @amiriel/vue@beta vue
+bun add @amiriel/vue@beta vue
 ```
 
 After the first stable release, install without the tag:
 
 ```bash
-npm install amiriel
+npm install @amiriel/vue vue
 ```
+
+Import the stylesheet once:
+
+```vue
+<script setup lang="ts">
+import "@amiriel/vue/style.css";
+</script>
+```
+
+The package depends on `amiriel` for the shared document model and declares
+`vue` as a peer dependency.
 
 ## Usage
 
@@ -55,8 +64,8 @@ import {
   AmirielBodyRenderer,
   type AmirielDocument,
   type AmirielMediaRequest,
-} from "amiriel";
-import "amiriel/style.css";
+} from "@amiriel/vue";
+import "@amiriel/vue/style.css";
 
 const document = ref<AmirielDocument>({
   theme: "midnight",
@@ -90,6 +99,17 @@ async function onMediaRequest(request: AmirielMediaRequest) {
 Host applications own media upload and pass the resulting media object back
 through `request.resolve(media)`.
 
+## Main Exports
+
+| Export | Description |
+| --- | --- |
+| `AmirielBodyEditor` | Controlled Vue editor shell |
+| `AmirielBodyRenderer` | Read-only Vue renderer |
+| `AmirielMediaLightbox` | Image/video lightbox |
+| `AmirielMediaVideo` | Inline video component |
+| `AmirielMediaVideoThumbnail` | Video thumbnail helper |
+| Core types and helpers | Re-exported from `amiriel` |
+
 ## Editor Props
 
 | Prop | Default | Description |
@@ -115,7 +135,7 @@ Built-in themes: `midnight`, `paper`, `memorial`.
 import {
   AmirielBodyEditor,
   type AmirielThemeDefinition,
-} from "amiriel";
+} from "@amiriel/vue";
 
 const customThemes: AmirielThemeDefinition[] = [
   {
@@ -142,19 +162,35 @@ const customThemes: AmirielThemeDefinition[] = [
 ## Package Architecture
 
 This repository is the Vue implementation. The shared framework-agnostic core
-lives in `@amiriel/core`, and the React implementation lives in
-`@amiriel/react`.
+lives in [`amiriel`](https://github.com/Amirieljs/Amiriel), and the React
+implementation lives in [`@amiriel/react`](https://github.com/Amirieljs/Amiriel-React).
 
-The Vue package keeps local compatibility exports for historical users, while
-delegating shared types, labels, theme definitions, and utility functions to
-`@amiriel/core`.
+The Vue package keeps the public component and type surface aligned with
+earlier beta APIs where possible, while delegating shared types, labels, theme
+definitions, and utility functions to `amiriel`.
+
+## Migration From Earlier Betas
+
+Earlier beta releases published the Vue implementation as `amiriel`. Starting
+with this package split, `amiriel` is the framework-agnostic core and Vue users
+should install `@amiriel/vue`.
+
+```diff
+- npm install amiriel@beta
++ npm install @amiriel/vue@beta vue
+
+- import { AmirielBodyEditor } from "amiriel";
+- import "amiriel/style.css";
++ import { AmirielBodyEditor } from "@amiriel/vue";
++ import "@amiriel/vue/style.css";
+```
 
 ## Release Sync
 
 This repository listens for `core-release` events dispatched from
-`Amirieljs/Amiriel`. On sync, GitHub Actions upgrades `@amiriel/core`, runs
-checks, bumps the Vue package beta version, publishes to npm, and creates a
-GitHub release.
+`Amirieljs/Amiriel`. On sync, GitHub Actions upgrades `amiriel`, runs checks,
+bumps the Vue package beta version, publishes to npm, and creates a GitHub
+release.
 
 Configure these secrets:
 
@@ -164,5 +200,6 @@ Configure these secrets:
 ## License
 
 MIT. The Vue editor package is open source and can be used commercially. The
-official hosted Amiriel product may still provide paid services around storage,
-accounts, delivery, hosting, collaboration, or other product workflows.
+official hosted Amiriel product at [amiriel.com](https://amiriel.com) may still
+provide paid services around storage, accounts, delivery, hosting, collaboration,
+or other product workflows.

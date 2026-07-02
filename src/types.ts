@@ -1,4 +1,4 @@
-import type { AmirielMediaRequest as CoreAmirielMediaRequest } from "@amiriel/core";
+import type { AmirielMediaRequest as CoreAmirielMediaRequest } from "amiriel";
 
 export type {
   AmirielBuiltinTheme,
@@ -18,6 +18,6 @@ export type {
   AmirielTextBlock,
   AmirielTextColor,
   AmirielTheme,
-} from "@amiriel/core";
+} from "amiriel";
 
 export type AmirielMediaRequest = CoreAmirielMediaRequest<File>;

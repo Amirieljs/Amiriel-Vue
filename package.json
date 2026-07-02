@@ -1,7 +1,7 @@
 {
-  "name": "amiriel",
-  "version": "0.0.1-beta.5",
-  "description": "Portable Vue 3 body editor and renderer for Amiriel letters.",
+  "name": "@amiriel/vue",
+  "version": "0.0.1-beta.6",
+  "description": "Vue 3 components for Amiriel letter documents.",
   "type": "module",
   "license": "MIT",
   "homepage": "https://amiriel.com",
@@ -14,6 +14,7 @@
     "url": "https://github.com/Amirieljs/Amiriel-Vue/issues"
   },
   "keywords": [
+    "amiriel",
     "vue",
     "vue3",
     "vue-component",
@@ -23,14 +24,14 @@
     "typescript",
     "vite"
   ],
-  "main": "./dist/amiriel.umd.cjs",
-  "module": "./dist/amiriel.js",
+  "main": "./dist/amiriel-vue.umd.cjs",
+  "module": "./dist/amiriel-vue.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/amiriel.js",
-      "require": "./dist/amiriel.umd.cjs"
+      "import": "./dist/amiriel-vue.js",
+      "require": "./dist/amiriel-vue.umd.cjs"
     },
     "./style.css": "./dist/style.css"
   },
@@ -48,7 +49,7 @@
     "vue": ">=3.5.0"
   },
   "dependencies": {
-    "@amiriel/core": "^0.0.1-beta.5",
+    "amiriel": "^0.0.1-beta.6",
     "@heroicons/vue": "2.2.0"
   },
   "devDependencies": {
