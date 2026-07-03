@@ -9,7 +9,7 @@
 </p>
 
 `@amiriel/vue` provides a Vue implementation of the Amiriel document renderer
-and editor. It is built on `amiriel`, so the document model, themes, labels, and
+and editor. It is built on `@amiriel/core`, so the document model, themes, labels, and
 normalization rules stay aligned with the React package.
 
 [![npm version (beta)](https://img.shields.io/npm/v/@amiriel/vue/beta?style=flat-square)](https://www.npmjs.com/package/@amiriel/vue)
@@ -26,7 +26,7 @@ The full hosted product lives at [amiriel.com](https://amiriel.com).
 - Matching read-only renderer for preview and delivery flows
 - Image/video lightbox and inline video helpers
 - Host-controlled media upload via `media-request` events
-- Shared model and document helpers from `amiriel`
+- Shared model and document helpers from `@amiriel/core`
 - TypeScript declarations
 
 The package does not include storage, authentication, routing, database, or
@@ -49,7 +49,7 @@ import "@amiriel/vue/style.css";
 </script>
 ```
 
-The package depends on `amiriel` for the shared document model and declares
+The package depends on `@amiriel/core` for the shared document model and declares
 `vue` as a peer dependency.
 
 ## Usage
@@ -106,7 +106,7 @@ through `request.resolve(media)`.
 | `AmirielMediaLightbox` | Image/video lightbox |
 | `AmirielMediaVideo` | Inline video component |
 | `AmirielMediaVideoThumbnail` | Video thumbnail helper |
-| Core types and helpers | Re-exported from `amiriel` |
+| Core types and helpers | Re-exported from `@amiriel/core` |
 
 ## Editor Props
 
@@ -160,13 +160,14 @@ const customThemes: AmirielThemeDefinition[] = [
 ## Package Architecture
 
 This repository is the Vue implementation. The shared framework-agnostic core
-lives in [`amiriel`](https://github.com/Amirieljs/Amiriel), and the React
+lives in [`@amiriel/core`](https://github.com/Amirieljs/Amiriel-Core), the meta package
+[`amiriel`](https://github.com/Amirieljs/Amiriel) re-exports it, and the React
 implementation lives in [`@amiriel/react`](https://github.com/Amirieljs/Amiriel-React).
 
 ## Release Sync
 
 This repository listens for `core-release` events dispatched from
-`Amirieljs/Amiriel`. On sync, GitHub Actions upgrades `amiriel`, runs checks,
+`Amirieljs/Amiriel-Core`. On sync, GitHub Actions upgrades `@amiriel/core`, runs checks,
 bumps the Vue package beta version, publishes to npm, and creates a GitHub
 release.
 
