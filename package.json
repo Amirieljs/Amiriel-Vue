@@ -49,7 +49,7 @@
     "vue": ">=3.5.0"
   },
   "dependencies": {
-    "amiriel": "^0.0.1-beta.6",
+    "@amiriel/core": "^0.0.1-beta.6",
     "@heroicons/vue": "2.2.0"
   },
   "devDependencies": {

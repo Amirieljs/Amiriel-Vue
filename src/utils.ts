@@ -27,4 +27,4 @@ export {
   syncPageText,
   themeDefaultTextBlockColor,
   widthPercentForHeight,
-} from "amiriel";
+} from "@amiriel/core";

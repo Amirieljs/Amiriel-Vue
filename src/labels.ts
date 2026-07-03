@@ -2,4 +2,4 @@ export {
   AMIRIEL_DEFAULT_LABELS,
   formatAmirielLabel,
   resolveAmirielLabels,
-} from "amiriel";
+} from "@amiriel/core";

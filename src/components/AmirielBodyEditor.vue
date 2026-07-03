@@ -408,6 +408,7 @@ function addTextBlockAt(event?: PointerEvent) {
   activePlacementId.value = "";
   syncPageText(selectedPage.value);
   commit();
+  focusTextBlock(block.id);
 }
 
 function removeTextBlock(blockId: string) {
@@ -781,6 +782,16 @@ function setTextBlockTextareaRef(blockId: string, el: unknown) {
   else textareaRefs.delete(blockId);
 }
 
+function focusTextBlock(blockId: string) {
+  nextTick(() => {
+    const textarea = textareaRefs.get(blockId);
+    if (!textarea) return;
+    textarea.focus();
+    const end = textarea.value.length;
+    textarea.setSelectionRange(end, end);
+  });
+}
+
 function isTextareaOverflowing(element: HTMLTextAreaElement) {
   return element.scrollHeight > element.clientHeight + 1 || element.scrollWidth > element.clientWidth + 1;
 }
@@ -835,9 +846,10 @@ function closeMenus() {
 
 function onLayoutClick(event: MouseEvent) {
   closeMenus();
-  if (!(event.target as Element).closest?.(".amiriel-body-editor__text-block")) {
-    activeTextBlockId.value = "";
-  }
+  const target = event.target as Element;
+  if (target.closest?.(".amiriel-body-editor__text-block")) return;
+  if (target.closest?.(".amiriel-body-editor__paper")) return;
+  activeTextBlockId.value = "";
 }
 
 onMounted(() => {

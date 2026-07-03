@@ -1,4 +1,4 @@
-export type { AmirielPaperThemeVars, AmirielThemeDefinition } from "amiriel";
+export type { AmirielPaperThemeVars, AmirielThemeDefinition } from "@amiriel/core";
 
 export {
   AMIRIEL_BUILTIN_THEME_DEFINITIONS,
@@ -7,4 +7,4 @@ export {
   findAmirielThemeDefinition,
   mergeAmirielThemeDefinitions,
   themeDefaultTextColorFor,
-} from "amiriel";
+} from "@amiriel/core";
