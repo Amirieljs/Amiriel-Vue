@@ -1,4 +1,4 @@
 allowBuilds:
   esbuild: set this to true or false
 minimumReleaseAgeExclude:
-  - '@amiriel/core@0.0.1-beta.7'
+  - '@amiriel/*'
