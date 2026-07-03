@@ -1,6 +1,6 @@
 {
   "name": "@amiriel/vue",
-  "version": "0.0.1-beta.7",
+  "version": "0.0.1-beta.8",
   "description": "Vue 3 components for Amiriel letter documents.",
   "type": "module",
   "license": "MIT",
