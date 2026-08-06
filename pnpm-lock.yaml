@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@amiriel/core':
-        specifier: ^0.0.1-beta.9
-        version: 0.0.1-beta.9
+        specifier: ^0.0.1
+        version: 0.0.1
       '@heroicons/vue':
         specifier: 2.2.0
         version: 2.2.0(vue@3.5.39(typescript@5.9.3))
@@ -33,8 +33,8 @@ importers:
 
 packages:
 
-  '@amiriel/core@0.0.1-beta.9':
-    resolution: {integrity: sha512-tfzaNcf0Qbhzv9LEhBZijGYBwi5nvOWXMHSzsRttAzsWk370rpQEheGu8y7tCxl+q+gKIM5NBk7jDOI4KTxtsw==}
+  '@amiriel/core@0.0.1':
+    resolution: {integrity: sha512-6WkpfALFwsqg7xV6XaqJm8fJQRH5x7I7u2QK91lu2vb1+AMcKT8poW8KDlQUOdz3bmvBOHkBvE6LMICe8xH26w==}
 
   '@babel/helper-string-parser@7.29.7':
     resolution: {integrity: sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw==}
@@ -543,7 +543,7 @@ packages:
 
 snapshots:
 
-  '@amiriel/core@0.0.1-beta.9': {}
+  '@amiriel/core@0.0.1': {}
 
   '@babel/helper-string-parser@7.29.7': {}
 
