@@ -414,6 +414,10 @@ function textBlockLimitReached(page?: AmirielPage) {
   return (page?.textBlocks ?? []).length >= resolvedLimits.value.maxTextBlocksPerPage;
 }
 
+function pageCanPlaceFirstTextBlock(page?: AmirielPage) {
+  return pageTextBlocks(page).length === 0 && pagePlacements(page).length === 0;
+}
+
 function pagePointFromEvent(event: PointerEvent) {
   const rect = previewPaperRef.value?.getBoundingClientRect();
   if (!rect || rect.width <= 0 || rect.height <= 0) return null;
@@ -430,6 +434,7 @@ function onPaperPointerDown(event: PointerEvent) {
     placeCalloutAt(event);
     return;
   }
+  if (!pageCanPlaceFirstTextBlock(selectedPage.value)) return;
   addTextBlockAt(event);
 }
 
@@ -1131,10 +1136,10 @@ onUnmounted(() => {
           <p v-if="placingCalloutBlockId && !readonly" class="amiriel-body-editor__hint amiriel-body-editor__callout-hint">
             {{ resolvedLabels.calloutHint }}
           </p>
-          <p v-else-if="!pageTextBlocks(selectedPage).length && !readonly" class="amiriel-body-editor__hint">
+          <p v-else-if="pageCanPlaceFirstTextBlock(selectedPage) && !readonly" class="amiriel-body-editor__hint">
             {{ resolvedLabels.tapPaperHint }}
           </p>
-          <p v-else-if="!pageTextBlocks(selectedPage).length" class="amiriel-body-editor__fallback-text"
+          <p v-else-if="!pageTextBlocks(selectedPage).length && readonly" class="amiriel-body-editor__fallback-text"
             :style="fontStyle(selectedPage?.font)">
             {{ resolvedLabels.pagePlaceholder }}
           </p>
