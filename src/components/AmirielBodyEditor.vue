@@ -37,7 +37,10 @@ import {
   AMIRIEL_TEXT_COLOR_OPTIONS,
   calloutStrokes,
   calloutTargetFromPagePoint,
+  canPlaceFirstTextBlock,
   clamp,
+  createTextBlock,
+  nextPageZ,
   combinedPageText,
   heightPercentForWidth,
   mediaAspectRatio,
@@ -362,13 +365,6 @@ function placementStyle(placement: AmirielMediaPlacement) {
   };
 }
 
-function nextZ(page: AmirielPage) {
-  return Math.max(
-    0,
-    ...(page.mediaPlacements ?? []).map((placement) => placement.z),
-    ...(page.textBlocks ?? []).map((block) => block.z),
-  ) + 1;
-}
 
 function syncPageMediaIds(page: AmirielPage) {
   page.mediaIds = Array.from(new Set((page.mediaPlacements ?? []).map((placement) => placement.mediaId)));
@@ -414,10 +410,6 @@ function textBlockLimitReached(page?: AmirielPage) {
   return (page?.textBlocks ?? []).length >= resolvedLimits.value.maxTextBlocksPerPage;
 }
 
-function pageCanPlaceFirstTextBlock(page?: AmirielPage) {
-  return pageTextBlocks(page).length === 0 && pagePlacements(page).length === 0;
-}
-
 function pagePointFromEvent(event: PointerEvent) {
   const rect = previewPaperRef.value?.getBoundingClientRect();
   if (!rect || rect.width <= 0 || rect.height <= 0) return null;
@@ -434,7 +426,7 @@ function onPaperPointerDown(event: PointerEvent) {
     placeCalloutAt(event);
     return;
   }
-  if (!pageCanPlaceFirstTextBlock(selectedPage.value)) return;
+  if (!canPlaceFirstTextBlock(selectedPage.value)) return;
   addTextBlockAt(event);
 }
 
@@ -443,20 +435,16 @@ function addTextBlockAt(event?: PointerEvent) {
   if (placingCalloutBlockId.value) return;
   event?.preventDefault();
   const rect = previewPaperRef.value.getBoundingClientRect();
-  const x = event ? ((event.clientX - rect.left) / rect.width) * 100 : 8;
-  const y = event ? ((event.clientY - rect.top) / rect.height) * 100 : 28;
-  const block: AmirielTextBlock = {
+  const block = createTextBlock(selectedPage.value, {
     id: crypto.randomUUID(),
-    x: clamp(x, 0, 78),
-    y: clamp(y, 0, 88),
-    width: 42,
-    height: 18,
-    text: "",
-    z: nextZ(selectedPage.value),
+    ...(event ? {
+      x: ((event.clientX - rect.left) / rect.width) * 100,
+      y: ((event.clientY - rect.top) / rect.height) * 100,
+    } : {}),
     font: lastTextBlockFont.value,
     fontSize: 16,
     color: lastTextBlockColor.value,
-  };
+  });
   selectedPage.value.textBlocks = [...(selectedPage.value.textBlocks ?? []), block];
   activeTextBlockId.value = block.id;
   activePlacementId.value = "";
@@ -498,7 +486,7 @@ function confirmRemoveTextBlock(blockId: string) {
 function selectTextBlock(page: AmirielPage, block: AmirielTextBlock) {
   activeTextBlockId.value = block.id;
   activePlacementId.value = "";
-  block.z = nextZ(page);
+  block.z = nextPageZ(page);
 }
 
 function deselectTextBlock(blockId: string, container: HTMLElement) {
@@ -699,13 +687,13 @@ function toggleTextBlockUnderline(block: AmirielTextBlock) {
 function selectPlacement(page: AmirielPage, placement: AmirielMediaPlacement) {
   activePlacementId.value = placement.id;
   activeTextBlockId.value = "";
-  placement.z = nextZ(page);
+  placement.z = nextPageZ(page);
 }
 
 function addMediaToPage(mediaId: string) {
   if (!selectedPage.value || props.readonly) return;
   const aspectRatio = mediaAspectRatio(mediaById(mediaId));
-  const z = nextZ(selectedPage.value);
+  const z = nextPageZ(selectedPage.value);
   const offset = (z - 1) % 6;
   const rect = currentPaperRect();
   const x = 10 + (offset % 3) * 8;
@@ -1136,7 +1124,7 @@ onUnmounted(() => {
           <p v-if="placingCalloutBlockId && !readonly" class="amiriel-body-editor__hint amiriel-body-editor__callout-hint">
             {{ resolvedLabels.calloutHint }}
           </p>
-          <p v-else-if="pageCanPlaceFirstTextBlock(selectedPage) && !readonly" class="amiriel-body-editor__hint">
+          <p v-else-if="canPlaceFirstTextBlock(selectedPage) && !readonly" class="amiriel-body-editor__hint">
             {{ resolvedLabels.tapPaperHint }}
           </p>
           <p v-else-if="!pageTextBlocks(selectedPage).length && readonly" class="amiriel-body-editor__fallback-text"
