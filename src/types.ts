@@ -2,6 +2,11 @@ import type { AmirielMediaRequest as CoreAmirielMediaRequest } from "@amiriel/co
 
 export type {
   AmirielBuiltinTheme,
+  AmirielCallout,
+  AmirielCalloutStroke,
+  AmirielCalloutTarget,
+  AmirielCalloutTargetPage,
+  AmirielCalloutTargetPlacement,
   AmirielDocument,
   AmirielEditorLimits,
   AmirielFont,

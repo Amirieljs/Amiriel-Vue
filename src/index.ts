@@ -7,6 +7,11 @@ export { default as AmirielMediaVideo } from "./components/AmirielMediaVideo.vue
 export { default as AmirielMediaVideoThumbnail } from "./components/AmirielMediaVideoThumbnail.vue";
 
 export type {
+  AmirielCallout,
+  AmirielCalloutStroke,
+  AmirielCalloutTarget,
+  AmirielCalloutTargetPage,
+  AmirielCalloutTargetPlacement,
   AmirielDocument,
   AmirielEditorLimits,
   AmirielFont,
@@ -43,6 +48,7 @@ export {
 } from "./themes";
 
 export {
+  AMIRIEL_DEFAULT_EDITOR_LIMITS,
   AMIRIEL_DEFAULT_PAPER_SIZE,
   AMIRIEL_DEFAULT_PAPER_SIZE_LIMITS,
   AMIRIEL_FONT_OPTIONS,
@@ -51,10 +57,15 @@ export {
   AMIRIEL_TEXT_COLOR_OPTIONS,
   AMIRIEL_THEME_DEFAULT_TEXT_COLOR,
   AMIRIEL_THEME_OPTIONS,
+  calloutStrokes,
+  calloutTargetFromPagePoint,
   combinedPageText,
   formatVideoDuration,
+  normalizeCallouts,
   normalizeDocument,
+  normalizeEditorLimits,
   normalizePaperSize,
   normalizePaperSizeLimits,
+  normalizeTextHref,
   themeDefaultTextBlockColor,
 } from "./utils";

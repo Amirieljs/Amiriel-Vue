@@ -15,6 +15,7 @@ import type { AmirielThemeDefinition } from "../themes";
 import {
   AMIRIEL_FONT_STACKS,
   AMIRIEL_TEXT_COLORS,
+  calloutStrokes,
   clamp,
   combinedPageText,
   heightPercentForWidth,
@@ -82,6 +83,12 @@ const paperSurfaceStyle = computed(() => ({
 const sortedPages = computed(() => [...normalized.value.pages].sort((a, b) => a.order - b.order));
 const currentPage = computed(() => sortedPages.value[props.pageIndex] ?? sortedPages.value[0]);
 const currentTextBlocks = computed(() => currentPage.value?.textBlocks ?? []);
+const currentCalloutStrokes = computed(() => calloutStrokes(
+  currentPage.value,
+  activePaperSize.value.width,
+  activePaperSize.value.height,
+));
+const calloutViewBox = computed(() => `0 0 ${activePaperSize.value.width} ${activePaperSize.value.height}`);
 const lightboxMedia = ref<AmirielMedia | null>(null);
 const lightboxOpen = ref(false);
 let paperScaleObserver: ResizeObserver | null = null;
@@ -114,7 +121,7 @@ function textBlockContentStyle(block: AmirielTextBlock, page?: AmirielPage) {
     fontSize: `${block.fontSize || 16}px`,
     fontWeight: block.bold ? "700" : undefined,
     fontStyle: block.italic ? "italic" : undefined,
-    textDecoration: block.underline ? "underline" : undefined,
+    textDecoration: block.underline || block.href ? "underline" : undefined,
     ...(block.color ? { color: AMIRIEL_TEXT_COLORS[block.color] } : {}),
   };
 }
@@ -231,14 +238,19 @@ onUnmounted(() => {
           {{ combinedPageText(currentPage) }}
         </p>
         <span v-else class="amiriel-renderer__text-layer">
-          <span
+          <component
+            :is="block.href ? 'a' : 'span'"
             v-for="block in currentTextBlocks"
             :key="block.id"
             class="amiriel-renderer__text-block"
+            :class="{ 'is-link': Boolean(block.href) }"
+            :href="block.href || undefined"
+            :target="block.href ? '_blank' : undefined"
+            :rel="block.href ? 'noopener noreferrer' : undefined"
             :style="[textBlockStyle(block), textBlockContentStyle(block, currentPage)]"
           >
             {{ block.text }}
-          </span>
+          </component>
         </span>
         <span v-if="currentPlacements(currentPage).length" class="amiriel-renderer__media-layer">
           <template v-for="placement in currentPlacements(currentPage)" :key="placement.id">
@@ -265,6 +277,12 @@ onUnmounted(() => {
             </button>
           </template>
         </span>
+        <svg v-if="currentCalloutStrokes.length" class="amiriel-renderer__callouts" :viewBox="calloutViewBox" aria-hidden="true">
+          <g v-for="stroke in currentCalloutStrokes" :key="stroke.id">
+            <line :x1="stroke.x1" :y1="stroke.y1" :x2="stroke.x2" :y2="stroke.y2" />
+            <path :d="stroke.head" />
+          </g>
+        </svg>
       </div>
     </article>
     </div>
@@ -275,14 +293,19 @@ onUnmounted(() => {
           {{ combinedPageText(currentPage) }}
         </p>
         <span v-else class="amiriel-renderer__text-layer">
-          <span
+          <component
+            :is="block.href ? 'a' : 'span'"
             v-for="block in currentTextBlocks"
             :key="block.id"
             class="amiriel-renderer__text-block"
+            :class="{ 'is-link': Boolean(block.href) }"
+            :href="block.href || undefined"
+            :target="block.href ? '_blank' : undefined"
+            :rel="block.href ? 'noopener noreferrer' : undefined"
             :style="[textBlockStyle(block), textBlockContentStyle(block, currentPage)]"
           >
             {{ block.text }}
-          </span>
+          </component>
         </span>
         <span v-if="currentPlacements(currentPage).length" class="amiriel-renderer__media-layer">
           <template v-for="placement in currentPlacements(currentPage)" :key="placement.id">
@@ -310,6 +333,12 @@ onUnmounted(() => {
             </button>
           </template>
         </span>
+        <svg v-if="currentCalloutStrokes.length" class="amiriel-renderer__callouts" :viewBox="calloutViewBox" aria-hidden="true">
+          <g v-for="stroke in currentCalloutStrokes" :key="stroke.id">
+            <line :x1="stroke.x1" :y1="stroke.y1" :x2="stroke.x2" :y2="stroke.y2" />
+            <path :d="stroke.head" />
+          </g>
+        </svg>
       </span>
     </span>
 
@@ -438,6 +467,32 @@ onUnmounted(() => {
   line-height: 2;
   text-align: left;
   white-space: pre-wrap;
+}
+
+.amiriel-renderer__text-block.is-link {
+  pointer-events: auto;
+  color: inherit;
+  cursor: pointer;
+}
+
+.amiriel-renderer__callouts {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.amiriel-renderer__callouts line {
+  stroke: var(--amiriel-paper-accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.amiriel-renderer__callouts path {
+  fill: var(--amiriel-paper-accent);
 }
 
 .amiriel-renderer__media-layer {

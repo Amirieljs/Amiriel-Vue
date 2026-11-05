@@ -2,9 +2,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   ArrowPathIcon,
+  ArrowUpRightIcon,
   ArrowsPointingOutIcon,
   CheckIcon,
   FilmIcon,
+  LinkIcon,
   PhotoIcon,
   PlayIcon,
   PlusIcon,
@@ -12,6 +14,7 @@ import {
   XMarkIcon,
 } from "@heroicons/vue/24/outline";
 import type {
+  AmirielCallout,
   AmirielDocument,
   AmirielEditorLimits,
   AmirielLabels,
@@ -32,14 +35,18 @@ import {
   AMIRIEL_FONT_STACKS,
   AMIRIEL_TEXT_COLORS,
   AMIRIEL_TEXT_COLOR_OPTIONS,
+  calloutStrokes,
+  calloutTargetFromPagePoint,
   clamp,
   combinedPageText,
   heightPercentForWidth,
   mediaAspectRatio,
   mediaSizeWithinPaper,
   normalizeDocument,
+  normalizeEditorLimits,
   normalizePaperSize,
   normalizePaperSizeLimits,
+  normalizeTextHref,
   safeAspectRatio,
   syncPageText,
   themeDefaultTextBlockColor,
@@ -125,6 +132,11 @@ const activeTextBlockId = ref("");
 const fontMenuId = ref("");
 const sizeMenuId = ref("");
 const colorMenuId = ref("");
+const linkMenuId = ref("");
+const linkDraft = ref("");
+const linkError = ref("");
+const placingCalloutBlockId = ref("");
+const pendingFocusBlockId = ref("");
 const paperFrameRef = ref<HTMLElement | null>(null);
 const previewPaperRef = ref<HTMLElement | null>(null);
 const paperScale = ref(1);
@@ -144,9 +156,13 @@ const lastTextBlockColor = ref<AmirielTextColor>(themeDefaultTextBlockColor(draf
 const overflowingTextBlockIds = ref(new Set<string>());
 const textareaRefs = new Map<string, HTMLTextAreaElement>();
 let dragState: DragState | null = null;
+let calloutDragId = "";
+let calloutDragPointerId = -1;
 let overflowObserver: ResizeObserver | null = null;
 let paperScaleObserver: ResizeObserver | null = null;
 let syncingFromParent = false;
+let focusAttempt = 0;
+let focusGestureCleanup: (() => void) | null = null;
 
 const textBlockFontSizes = [12, 14, 16, 18, 20, 24] as const;
 const resolvedLabels = computed(() => resolveAmirielLabels(props.locale, props.labels));
@@ -165,12 +181,13 @@ const activeThemeDefinition = computed(() =>
   findAmirielThemeDefinition(draft.value.theme, props.themes),
 );
 const activeThemeStyle = computed(() => amirielThemeCssVars(activeThemeDefinition.value));
-const resolvedLimits = computed(() => ({
-  maxPages: props.limits?.maxPages ?? 20,
-  maxTextBlocksPerPage: props.limits?.maxTextBlocksPerPage ?? 4,
-  maxImages: props.limits?.maxImages ?? 3,
-  maxVideos: props.limits?.maxVideos ?? 1,
-}));
+const resolvedLimits = computed(() => normalizeEditorLimits(props.limits));
+const selectedCalloutStrokes = computed(() => calloutStrokes(
+  selectedPage.value,
+  activePaperSize.value.width,
+  activePaperSize.value.height,
+));
+const calloutViewBox = computed(() => `0 0 ${activePaperSize.value.width} ${activePaperSize.value.height}`);
 const selectedPage = computed(() => draft.value.pages.find((page) => page.id === selectedPageId.value) ?? draft.value.pages[0]);
 const mediaCounts = computed(() => ({
   images: draft.value.media.filter((item) => item.type === "image").length,
@@ -182,11 +199,20 @@ const uploadLimitReached = computed(() =>
   mediaCounts.value.videos >= resolvedLimits.value.maxVideos,
 );
 
+function documentsMatch(left: AmirielDocument, right: AmirielDocument) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 watch(
   () => [props.modelValue, props.defaultPaperSize, props.paperSizeLimits, props.paperResizable] as const,
   ([value]) => {
+    const incoming = normalizeDocument(value, paperNormalizeOptions());
+    if (documentsMatch(incoming, draft.value)) {
+      flushTextBlockFocus();
+      return;
+    }
     syncingFromParent = true;
-    draft.value = normalizeDocument(value, paperNormalizeOptions());
+    draft.value = incoming;
     if (!draft.value.pages.some((page) => page.id === selectedPageId.value)) {
       selectedPageId.value = draft.value.pages[0]?.id ?? "";
     }
@@ -194,6 +220,7 @@ watch(
       syncingFromParent = false;
       refreshPaperScale();
       refreshOverflowStates();
+      flushTextBlockFocus();
     });
   },
   { deep: true },
@@ -229,6 +256,7 @@ function commit() {
   nextTick(() => {
     refreshPaperScale();
     refreshOverflowStates();
+    flushTextBlockFocus();
   });
 }
 
@@ -254,7 +282,7 @@ function textBlockContentStyle(block: AmirielTextBlock, pageFont?: AmirielFont) 
     fontSize: `${textBlockFontSize(block)}px`,
     fontWeight: block.bold ? "700" : undefined,
     fontStyle: block.italic ? "italic" : undefined,
-    textDecoration: block.underline ? "underline" : undefined,
+    textDecoration: block.underline || block.href ? "underline" : undefined,
     ...(textBlockColorHex(block) ? { color: textBlockColorHex(block) } : {}),
   };
 }
@@ -386,8 +414,29 @@ function textBlockLimitReached(page?: AmirielPage) {
   return (page?.textBlocks ?? []).length >= resolvedLimits.value.maxTextBlocksPerPage;
 }
 
+function pagePointFromEvent(event: PointerEvent) {
+  const rect = previewPaperRef.value?.getBoundingClientRect();
+  if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+  return {
+    x: clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100),
+    y: clamp(((event.clientY - rect.top) / rect.height) * 100, 0, 100),
+  };
+}
+
+function onPaperPointerDown(event: PointerEvent) {
+  if (props.readonly) return;
+  if (placingCalloutBlockId.value) {
+    event.preventDefault();
+    placeCalloutAt(event);
+    return;
+  }
+  addTextBlockAt(event);
+}
+
 function addTextBlockAt(event?: PointerEvent) {
   if (!selectedPage.value || props.readonly || !previewPaperRef.value || textBlockLimitReached(selectedPage.value)) return;
+  if (placingCalloutBlockId.value) return;
+  event?.preventDefault();
   const rect = previewPaperRef.value.getBoundingClientRect();
   const x = event ? ((event.clientX - rect.left) / rect.width) * 100 : 8;
   const y = event ? ((event.clientY - rect.top) / rect.height) * 100 : 28;
@@ -408,7 +457,24 @@ function addTextBlockAt(event?: PointerEvent) {
   activePlacementId.value = "";
   syncPageText(selectedPage.value);
   commit();
-  focusTextBlock(block.id);
+  if (!event) {
+    scheduleTextBlockFocus(block.id);
+    return;
+  }
+  const pointerId = event.pointerId;
+  const blockId = block.id;
+  clearFocusGesture();
+  const finish = (up: PointerEvent) => {
+    if (up.pointerId !== pointerId) return;
+    clearFocusGesture();
+    scheduleTextBlockFocus(blockId);
+  };
+  window.addEventListener("pointerup", finish);
+  window.addEventListener("pointercancel", finish);
+  focusGestureCleanup = () => {
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", finish);
+  };
 }
 
 function removeTextBlock(blockId: string) {
@@ -432,9 +498,10 @@ function selectTextBlock(page: AmirielPage, block: AmirielTextBlock) {
 
 function deselectTextBlock(blockId: string, container: HTMLElement) {
   window.setTimeout(() => {
-    if (dragState) return;
+    if (dragState || calloutDragId) return;
     if (container.contains(document.activeElement)) return;
     if (activeTextBlockId.value !== blockId) return;
+    if (pendingFocusBlockId.value === blockId) return;
     activeTextBlockId.value = "";
     closeMenus();
   }, 0);
@@ -453,18 +520,140 @@ function toggleTextBlockFontMenu(blockId: string) {
   fontMenuId.value = fontMenuId.value === blockId ? "" : blockId;
   sizeMenuId.value = "";
   colorMenuId.value = "";
+  linkMenuId.value = "";
 }
 
 function toggleTextBlockSizeMenu(blockId: string) {
   sizeMenuId.value = sizeMenuId.value === blockId ? "" : blockId;
   fontMenuId.value = "";
   colorMenuId.value = "";
+  linkMenuId.value = "";
 }
 
 function toggleTextBlockColorMenu(blockId: string) {
   colorMenuId.value = colorMenuId.value === blockId ? "" : blockId;
   fontMenuId.value = "";
   sizeMenuId.value = "";
+  linkMenuId.value = "";
+}
+
+function toggleTextBlockLinkMenu(block: AmirielTextBlock) {
+  fontMenuId.value = "";
+  sizeMenuId.value = "";
+  colorMenuId.value = "";
+  if (linkMenuId.value === block.id) {
+    linkMenuId.value = "";
+    scheduleTextBlockFocus(block.id);
+    return;
+  }
+  linkMenuId.value = block.id;
+  linkDraft.value = block.href || "";
+  linkError.value = "";
+}
+
+function applyTextBlockLink(block: AmirielTextBlock) {
+  const href = normalizeTextHref(linkDraft.value);
+  if (linkDraft.value.trim() && !href) {
+    linkError.value = resolvedLabels.value.textBlockLinkInvalid;
+    return;
+  }
+  if (href) block.href = href;
+  else delete block.href;
+  linkMenuId.value = "";
+  linkError.value = "";
+  commit();
+  scheduleTextBlockFocus(block.id);
+}
+
+function clearTextBlockLink(block: AmirielTextBlock) {
+  linkDraft.value = "";
+  delete block.href;
+  linkMenuId.value = "";
+  linkError.value = "";
+  commit();
+  scheduleTextBlockFocus(block.id);
+}
+
+function calloutForBlock(blockId: string) {
+  return selectedPage.value?.callouts?.find((callout) => callout.textBlockId === blockId);
+}
+
+function toggleCalloutPlacement(blockId: string) {
+  closeMenus();
+  placingCalloutBlockId.value = placingCalloutBlockId.value === blockId ? "" : blockId;
+  activeTextBlockId.value = blockId;
+  activePlacementId.value = "";
+}
+
+function removeCallout(blockId: string) {
+  if (!selectedPage.value || props.readonly) return;
+  selectedPage.value.callouts = (selectedPage.value.callouts ?? []).filter((callout) => callout.textBlockId !== blockId);
+  if (placingCalloutBlockId.value === blockId) placingCalloutBlockId.value = "";
+  commit();
+}
+
+function placeCalloutAt(event: PointerEvent) {
+  if (!selectedPage.value || !placingCalloutBlockId.value) return;
+  const point = pagePointFromEvent(event);
+  if (!point) return;
+  const blockId = placingCalloutBlockId.value;
+  const target = calloutTargetFromPagePoint(selectedPage.value, point.x, point.y);
+  upsertCallout(blockId, target);
+}
+
+function upsertCallout(blockId: string, target: AmirielCallout["target"]) {
+  if (!selectedPage.value) return;
+  const existing = selectedPage.value.callouts?.find((callout) => callout.textBlockId === blockId);
+  const callout: AmirielCallout = existing
+    ? { ...existing, target }
+    : { id: crypto.randomUUID(), textBlockId: blockId, target };
+  selectedPage.value.callouts = [
+    ...(selectedPage.value.callouts ?? []).filter((item) => item.textBlockId !== blockId),
+    callout,
+  ];
+  placingCalloutBlockId.value = "";
+  commit();
+}
+
+function onPlacementPointerDown(event: PointerEvent, placement: AmirielMediaPlacement) {
+  if (placingCalloutBlockId.value) {
+    event.preventDefault();
+    event.stopPropagation();
+    placeCalloutAt(event);
+    return;
+  }
+  beginDrag(event, "placement", placement, "move");
+}
+
+function beginCalloutDrag(event: PointerEvent, calloutId: string) {
+  if (props.readonly || event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const target = event.currentTarget as HTMLElement;
+  target.setPointerCapture?.(event.pointerId);
+  calloutDragId = calloutId;
+  calloutDragPointerId = event.pointerId;
+  window.addEventListener("pointermove", onCalloutDragMove);
+  window.addEventListener("pointerup", endCalloutDrag);
+  window.addEventListener("pointercancel", endCalloutDrag);
+}
+
+function onCalloutDragMove(event: PointerEvent) {
+  if (!calloutDragId || !selectedPage.value || event.pointerId !== calloutDragPointerId) return;
+  const point = pagePointFromEvent(event);
+  const callout = selectedPage.value.callouts?.find((item) => item.id === calloutDragId);
+  if (!point || !callout) return;
+  callout.target = calloutTargetFromPagePoint(selectedPage.value, point.x, point.y);
+}
+
+function endCalloutDrag() {
+  if (!calloutDragId) return;
+  calloutDragId = "";
+  calloutDragPointerId = -1;
+  window.removeEventListener("pointermove", onCalloutDragMove);
+  window.removeEventListener("pointerup", endCalloutDrag);
+  window.removeEventListener("pointercancel", endCalloutDrag);
+  commit();
 }
 
 function selectTextBlockFont(block: AmirielTextBlock, font: AmirielFont) {
@@ -782,13 +971,44 @@ function setTextBlockTextareaRef(blockId: string, el: unknown) {
   else textareaRefs.delete(blockId);
 }
 
-function focusTextBlock(blockId: string) {
+function clearFocusGesture() {
+  focusGestureCleanup?.();
+  focusGestureCleanup = null;
+}
+
+function scheduleTextBlockFocus(blockId: string) {
+  pendingFocusBlockId.value = blockId;
+  focusAttempt = 0;
+  flushTextBlockFocus();
+}
+
+function flushTextBlockFocus() {
+  const blockId = pendingFocusBlockId.value;
+  if (!blockId) return;
   nextTick(() => {
-    const textarea = textareaRefs.get(blockId);
-    if (!textarea) return;
-    textarea.focus();
-    const end = textarea.value.length;
-    textarea.setSelectionRange(end, end);
+    requestAnimationFrame(() => {
+      if (pendingFocusBlockId.value !== blockId) return;
+      const textarea = textareaRefs.get(blockId);
+      if (!textarea?.isConnected) {
+        if (focusAttempt < 4) {
+          focusAttempt += 1;
+          flushTextBlockFocus();
+        }
+        return;
+      }
+      textarea.focus({ preventScroll: true });
+      if (document.activeElement === textarea) {
+        const end = textarea.value.length;
+        textarea.setSelectionRange(end, end);
+        pendingFocusBlockId.value = "";
+        focusAttempt = 0;
+        return;
+      }
+      if (focusAttempt < 4) {
+        focusAttempt += 1;
+        flushTextBlockFocus();
+      }
+    });
   });
 }
 
@@ -838,10 +1058,17 @@ function setupOverflowObserver() {
   for (const element of textareaRefs.values()) overflowObserver.observe(element);
 }
 
+function onTextToolsMouseDown(event: MouseEvent) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest("input, textarea, select, a")) return;
+  event.preventDefault();
+}
+
 function closeMenus() {
   fontMenuId.value = "";
   sizeMenuId.value = "";
   colorMenuId.value = "";
+  linkMenuId.value = "";
 }
 
 function onLayoutClick(event: MouseEvent) {
@@ -860,6 +1087,8 @@ onUnmounted(() => {
   paperScaleObserver?.disconnect();
   overflowObserver?.disconnect();
   endDrag();
+  endCalloutDrag();
+  clearFocusGesture();
   clearPendingUpload();
 });
 </script>
@@ -890,7 +1119,7 @@ onUnmounted(() => {
     <div class="amiriel-body-editor__layout" @click="onLayoutClick">
       <div class="amiriel-body-editor__workspace">
         <div ref="paperFrameRef" class="amiriel-body-editor__paper-frame" :style="paperFrameStyle">
-        <article ref="previewPaperRef" class="amiriel-body-editor__paper" :style="paperSurfaceStyle" @pointerdown.self="addTextBlockAt($event)">
+        <article ref="previewPaperRef" class="amiriel-body-editor__paper" :class="{ 'is-placing-callout': Boolean(placingCalloutBlockId) }" :style="paperSurfaceStyle" @pointerdown.self="onPaperPointerDown">
           <button v-if="!readonly && selectedPage" type="button" class="amiriel-body-editor__delete-page"
             :disabled="draft.pages.length <= 1" :aria-label="resolvedLabels.removePage"
             :title="resolvedLabels.removePage" @click.stop="removePage(selectedPage.id)">
@@ -899,7 +1128,10 @@ onUnmounted(() => {
           <div class="amiriel-body-editor__paper-head">
             <p>{{ label(resolvedLabels.pagesCount, { count: draft.pages.length, max: resolvedLimits.maxPages }) }}</p>
           </div>
-          <p v-if="!pageTextBlocks(selectedPage).length && !readonly" class="amiriel-body-editor__hint">
+          <p v-if="placingCalloutBlockId && !readonly" class="amiriel-body-editor__hint amiriel-body-editor__callout-hint">
+            {{ resolvedLabels.calloutHint }}
+          </p>
+          <p v-else-if="!pageTextBlocks(selectedPage).length && !readonly" class="amiriel-body-editor__hint">
             {{ resolvedLabels.tapPaperHint }}
           </p>
           <p v-else-if="!pageTextBlocks(selectedPage).length" class="amiriel-body-editor__fallback-text"
@@ -920,7 +1152,7 @@ onUnmounted(() => {
                 @input="selectedPage && onTextBlockInput(selectedPage)" @pointerdown.stop
                 @focus="selectedPage && selectTextBlock(selectedPage, block)" />
               <div v-if="!readonly && activeTextBlockId === block.id" class="amiriel-body-editor__text-tools"
-                @mousedown.prevent>
+                @mousedown="onTextToolsMouseDown">
                 <button type="button" :aria-label="resolvedLabels.moveTextBlock" :title="resolvedLabels.moveTextBlock"
                   @pointerdown.stop="beginDrag($event, 'text', block, 'move')">
                   <ArrowsPointingOutIcon />
@@ -963,6 +1195,33 @@ onUnmounted(() => {
                   :aria-label="resolvedLabels.textBlockUnderline" :title="resolvedLabels.textBlockUnderline"
                   @pointerdown.stop @click.stop="toggleTextBlockUnderline(block)">U</button>
                 <div class="amiriel-body-editor__menu-wrap">
+                  <button type="button" :class="{ 'is-on': Boolean(block.href) }" :aria-label="resolvedLabels.textBlockLink"
+                    :title="resolvedLabels.textBlockLink" @pointerdown.stop @click.stop="toggleTextBlockLinkMenu(block)">
+                    <LinkIcon />
+                  </button>
+                  <div v-if="linkMenuId === block.id" class="amiriel-body-editor__link-menu" @pointerdown.stop>
+                    <label>
+                      <span>{{ resolvedLabels.textBlockLinkUrl }}</span>
+                      <input v-model="linkDraft" type="url" :placeholder="resolvedLabels.textBlockLinkUrl"
+                        @keydown.enter.prevent="applyTextBlockLink(block)" />
+                    </label>
+                    <p v-if="linkError" class="amiriel-body-editor__link-error">{{ linkError }}</p>
+                    <div class="amiriel-body-editor__link-actions">
+                      <button type="button" @click.stop="applyTextBlockLink(block)">{{ resolvedLabels.textBlockLinkApply }}</button>
+                      <button type="button" @click.stop="clearTextBlockLink(block)">{{ resolvedLabels.textBlockLinkClear }}</button>
+                    </div>
+                  </div>
+                </div>
+                <button type="button" :class="{ 'is-on': placingCalloutBlockId === block.id || Boolean(calloutForBlock(block.id)) }"
+                  :aria-label="resolvedLabels.addCallout" :title="resolvedLabels.addCallout" @pointerdown.stop
+                  @click.stop="toggleCalloutPlacement(block.id)">
+                  <ArrowUpRightIcon />
+                </button>
+                <button v-if="calloutForBlock(block.id)" type="button" :aria-label="resolvedLabels.removeCallout"
+                  :title="resolvedLabels.removeCallout" @pointerdown.stop @click.stop="removeCallout(block.id)">
+                  <XMarkIcon />
+                </button>
+                <div class="amiriel-body-editor__menu-wrap">
                   <button type="button" :aria-label="resolvedLabels.textBlockColor"
                     :title="resolvedLabels.textBlockColor" @pointerdown.stop
                     @click.stop="toggleTextBlockColorMenu(block.id)">
@@ -998,7 +1257,7 @@ onUnmounted(() => {
             <template v-for="placement in pagePlacements(selectedPage)" :key="placement.id">
               <div v-if="mediaById(placement.mediaId)" class="amiriel-body-editor__placement"
                 :class="{ 'is-active': activePlacementId === placement.id }" :style="placementStyle(placement)"
-                @pointerdown.stop="beginDrag($event, 'placement', placement, 'move')">
+                @pointerdown.stop="onPlacementPointerDown($event, placement)">
                 <img v-if="mediaById(placement.mediaId)?.type === 'image'" :src="mediaById(placement.mediaId)?.url"
                   :alt="mediaById(placement.mediaId)?.objectKey || 'media'" draggable="false" @dragstart.prevent
                   @load="onPlacementImageLoaded($event, placement.mediaId)"
@@ -1032,6 +1291,19 @@ onUnmounted(() => {
                   @pointerdown.stop="beginDrag($event, 'placement', placement, 'resize')" />
               </div>
             </template>
+          </div>
+          <div v-if="selectedCalloutStrokes.length" class="amiriel-body-editor__callout-layer">
+            <svg :viewBox="calloutViewBox" aria-hidden="true">
+              <g v-for="stroke in selectedCalloutStrokes" :key="stroke.id">
+                <line :x1="stroke.x1" :y1="stroke.y1" :x2="stroke.x2" :y2="stroke.y2" />
+                <path :d="stroke.head" />
+              </g>
+            </svg>
+            <button v-for="stroke in selectedCalloutStrokes" :key="`${stroke.id}-handle`" type="button"
+              class="amiriel-body-editor__callout-handle"
+              :style="{ left: `${(stroke.targetX / activePaperSize.width) * 100}%`, top: `${(stroke.targetY / activePaperSize.height) * 100}%` }"
+              :aria-label="resolvedLabels.calloutTarget" :title="resolvedLabels.calloutTarget"
+              @pointerdown.stop="beginCalloutDrag($event, stroke.id)" />
           </div>
           <div v-if="!pagePlacements(selectedPage).length && !readonly" class="amiriel-body-editor__media-hint">
             {{ resolvedLabels.pageMediaHint }}
@@ -1305,6 +1577,10 @@ onUnmounted(() => {
   overflow: visible;
 }
 
+.amiriel-body-editor__paper.is-placing-callout {
+  cursor: crosshair;
+}
+
 .amiriel-body-editor__paper {
   position: absolute;
   top: 0;
@@ -1380,9 +1656,15 @@ onUnmounted(() => {
 }
 
 .amiriel-body-editor__text-layer,
-.amiriel-body-editor__media-layer {
+.amiriel-body-editor__media-layer,
+.amiriel-body-editor__callout-layer {
   position: absolute;
   inset: 0;
+}
+
+.amiriel-body-editor__text-layer,
+.amiriel-body-editor__callout-layer {
+  pointer-events: none;
 }
 
 .amiriel-body-editor__media-layer {
@@ -1395,6 +1677,7 @@ onUnmounted(() => {
   border-radius: 0.45rem;
   background: transparent;
   padding: 0.25rem;
+  pointer-events: auto;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -1438,12 +1721,97 @@ onUnmounted(() => {
 
 .amiriel-body-editor__text-tools {
   left: 0;
-  top: -2.4rem;
+  bottom: calc(100% + 0.35rem);
+  flex-wrap: wrap;
+  max-width: 18rem;
 }
 
 .amiriel-body-editor__placement-tools {
   right: 0.25rem;
   top: 0.25rem;
+}
+
+.amiriel-body-editor__text-tools button svg,
+.amiriel-body-editor__text-tools a.amiriel-body-editor__github-link svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.amiriel-body-editor__link-menu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  z-index: 70;
+  display: grid;
+  gap: 0.35rem;
+  width: 14rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.45rem;
+  background: #0b0b0c;
+  padding: 0.5rem;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
+.amiriel-body-editor__link-menu label {
+  display: grid;
+  gap: 0.25rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.75rem;
+}
+
+.amiriel-body-editor__link-menu input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: #fff;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+}
+
+.amiriel-body-editor__link-error {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 0.75rem;
+}
+
+.amiriel-body-editor__link-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.amiriel-body-editor__callout-layer {
+  z-index: 35;
+}
+
+.amiriel-body-editor__callout-layer svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.amiriel-body-editor__callout-layer line {
+  stroke: var(--amiriel-paper-accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.amiriel-body-editor__callout-layer path {
+  fill: var(--amiriel-paper-accent);
+}
+
+.amiriel-body-editor__callout-handle {
+  position: absolute;
+  z-index: 2;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin: -0.35rem 0 0 -0.35rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--amiriel-paper-accent);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  cursor: grab;
 }
 
 .amiriel-body-editor__text-tools button,
